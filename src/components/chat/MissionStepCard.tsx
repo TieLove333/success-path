@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import type { MissionTask } from "@/types/chat";
 
@@ -22,56 +23,122 @@ export default function MissionStepCard({
   isCompleted,
   onToggleTask,
 }: MissionStepCardProps) {
+  const allChecklistDone = useMemo(() => {
+    if (!tasks || tasks.length === 0) return false;
+    return tasks.every((t) => Boolean(t.completed));
+  }, [tasks]);
+
+  // Derived default:
+  // - unchecked => expanded
+  // - all checked => collapsed
+  //
+  // Manual override is only used when user explicitly toggles details while checked.
+  const [manualDetailsExpanded, setManualDetailsExpanded] = useState<
+    boolean | null
+  >(null);
+
+  const isDetailsExpanded = useMemo(() => {
+    if (!allChecklistDone) return true; // always expanded when not complete
+    return manualDetailsExpanded ?? false; // collapsed by default when complete
+  }, [allChecklistDone, manualDetailsExpanded]);
+
+  const canToggleDetails =
+    (Boolean(content) || (examples && examples.length > 0)) && allChecklistDone;
+
   return (
     <div className="premium-card animate-in" style={{ marginBottom: "2rem" }}>
       <span className="tagline">Task {stepNumber}</span>
-      <h2 style={{ fontSize: "1.75rem", marginBottom: "1rem" }}>{title}</h2>
 
-      <div style={{ color: "var(--text-muted)", marginBottom: "1.5rem" }}>
-        {content}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          gap: "1rem",
+        }}
+      >
+        <h2 style={{ fontSize: "1.75rem", marginBottom: "0.25rem" }}>
+          {title}
+        </h2>
+
+        {canToggleDetails && (
+          <button
+            type="button"
+            onClick={() => setManualDetailsExpanded((v) => !(v ?? false))}
+            style={{
+              border: "1px solid var(--card-border)",
+              background: "transparent",
+              color: "var(--text-dark)",
+              padding: "0.5rem 0.75rem",
+              borderRadius: "999px",
+              cursor: "pointer",
+              fontWeight: 600,
+              fontSize: "0.85rem",
+              whiteSpace: "nowrap",
+              opacity: 0.9,
+            }}
+            aria-expanded={isDetailsExpanded}
+            aria-controls={`task-details-${stepNumber}`}
+            title={isDetailsExpanded ? "Collapse details" : "Expand details"}
+          >
+            {isDetailsExpanded ? "Hide details" : "Show details"}
+          </button>
+        )}
       </div>
 
-      {examples && (
-        <div
-          style={{
-            background: "var(--bg-warm)",
-            padding: "1.5rem",
-            borderRadius: "16px",
-            marginBottom: "1.5rem",
-            border: "1px solid var(--card-border)",
-          }}
-        >
-          <p
+      <div
+        id={`task-details-${stepNumber}`}
+        style={{
+          display: isDetailsExpanded ? "block" : "none",
+          marginTop: "0.75rem",
+        }}
+      >
+        <div style={{ color: "var(--text-muted)", marginBottom: "1.5rem" }}>
+          {content}
+        </div>
+
+        {examples && (
+          <div
             style={{
-              fontWeight: "600",
-              marginBottom: "0.75rem",
-              fontSize: "0.9rem",
-              textTransform: "uppercase",
+              background: "var(--bg-warm)",
+              padding: "1.5rem",
+              borderRadius: "16px",
+              marginBottom: "1.5rem",
+              border: "1px solid var(--card-border)",
             }}
           >
-            Examples:
-          </p>
-          <ul style={{ listStyle: "none", padding: 0 }}>
-            {examples.map((ex, i) => (
-              <li
-                key={i}
-                style={{
-                  marginBottom: "0.5rem",
-                  display: "flex",
-                  gap: "0.5rem",
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                <span style={{ color: "var(--brand-terracotta)" }}>•</span>
-                {ex}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+            <p
+              style={{
+                fontWeight: "600",
+                marginBottom: "0.75rem",
+                fontSize: "0.9rem",
+                textTransform: "uppercase",
+              }}
+            >
+              Examples:
+            </p>
+            <ul style={{ listStyle: "none", padding: 0 }}>
+              {examples.map((ex, i) => (
+                <li
+                  key={i}
+                  style={{
+                    marginBottom: "0.5rem",
+                    display: "flex",
+                    gap: "0.5rem",
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  <span style={{ color: "var(--brand-terracotta)" }}>•</span>
+                  {ex}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
 
       {tasks && (
-        <div style={{ marginTop: "2rem" }}>
+        <div style={{ marginTop: "1.25rem" }}>
           {tasks.map((task, i) => (
             <label
               key={i}
@@ -91,9 +158,11 @@ export default function MissionStepCard({
               <input
                 type="checkbox"
                 checked={task.completed}
-                onChange={() =>
-                  onToggleTask(task.id ?? task.taskId ?? `${stepNumber}-${i}`)
-                }
+                onChange={() => {
+                  // If something becomes unchecked, revert to derived expanded state by clearing manual override.
+                  if (task.completed) setManualDetailsExpanded(null);
+                  onToggleTask(task.id ?? task.taskId ?? `${stepNumber}-${i}`);
+                }}
                 style={{
                   width: "20px",
                   height: "20px",

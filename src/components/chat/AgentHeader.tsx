@@ -1,23 +1,28 @@
-type AgentHeaderProps = Record<string, never>;
+type AgentHeaderProps = {
+  variant?: "hero" | "compact";
+};
 
-export default function AgentHeader({}: AgentHeaderProps) {
+export default function AgentHeader({ variant = "hero" }: AgentHeaderProps) {
   return (
     <div
       className="animate-in"
       style={{
         display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        textAlign: "center",
-        marginBottom: "6rem",
-        paddingTop: "2rem",
+        flexDirection: variant === "compact" ? "row" : "column",
+        alignItems: variant === "compact" ? "flex-start" : "center",
+        textAlign: variant === "compact" ? "left" : "center",
+        justifyContent: variant === "compact" ? "flex-start" : "center",
+        gap: variant === "compact" ? "1rem" : undefined,
+        marginBottom: variant === "compact" ? "0" : "6rem",
+        paddingTop: variant === "compact" ? "0" : "2rem",
+        marginTop: variant === "compact" ? "-0.35rem" : undefined,
       }}
     >
       <div
         className="logo-container"
         style={{
-          width: "120px",
-          height: "120px",
+          width: variant === "compact" ? "52px" : "120px",
+          height: variant === "compact" ? "52px" : "120px",
           borderRadius: "50%",
           background: "white",
           display: "flex",
@@ -25,7 +30,8 @@ export default function AgentHeader({}: AgentHeaderProps) {
           justifyContent: "center",
           boxShadow: "var(--shadow-soft)",
           border: "1px solid var(--card-border)",
-          marginBottom: "2.5rem",
+          marginBottom: variant === "compact" ? "0" : "2.5rem",
+          flex: "0 0 auto",
           position: "relative",
           cursor: "pointer",
           transition: "var(--transition-standard)",
@@ -33,8 +39,8 @@ export default function AgentHeader({}: AgentHeaderProps) {
       >
         {/* Premium Brand Mark (Modernized Cube/Path) */}
         <svg
-          width="60"
-          height="60"
+          width={variant === "compact" ? "28" : "60"}
+          height={variant === "compact" ? "28" : "60"}
           viewBox="0 0 100 100"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
@@ -82,44 +88,54 @@ export default function AgentHeader({}: AgentHeaderProps) {
         />
       </div>
 
-      <div style={{ maxWidth: "600px" }}>
-        <span className="tagline">The Simple Rhythm</span>
+      <div
+        style={{
+          maxWidth: variant === "compact" ? "520px" : "600px",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          paddingTop: variant === "compact" ? "0.1rem" : undefined,
+        }}
+      >
         <h1
           style={{
-            fontSize: "2.5rem",
-            marginBottom: "1rem",
+            fontSize: variant === "compact" ? "1.35rem" : "2.5rem",
+            marginBottom: variant === "compact" ? "0.15rem" : "1rem",
             color: "var(--text-dark)",
             fontFamily: "var(--font-serif)",
             textTransform: "none",
             letterSpacing: "-0.02em",
             fontWeight: "500",
+            lineHeight: variant === "compact" ? "1.15" : undefined,
           }}
         >
           Social Media <span className="serif-italic">Success Path</span>
         </h1>
         <div
           style={{
-            width: "40px",
+            width: variant === "compact" ? "28px" : "40px",
             height: "2px",
             background: "var(--brand-terracotta)",
-            margin: "1.5rem auto",
+            margin: variant === "compact" ? "0.4rem 0 0" : "1.5rem auto",
             opacity: "0.5",
           }}
         />
-        <p
-          style={{
-            fontSize: "1.25rem",
-            color: "var(--text-muted)",
-            fontWeight: "400",
-            lineHeight: "1.4",
-          }}
-        >
-          Stop guessing and start{" "}
-          <span style={{ color: "var(--text-dark)", fontWeight: "600" }}>
-            compounding
-          </span>{" "}
-          visibility that produces predictable leads.
-        </p>
+        {variant !== "compact" && (
+          <p
+            style={{
+              fontSize: "1.25rem",
+              color: "var(--text-muted)",
+              fontWeight: "400",
+              lineHeight: "1.4",
+            }}
+          >
+            Stop guessing and start{" "}
+            <span style={{ color: "var(--text-dark)", fontWeight: "600" }}>
+              compounding
+            </span>{" "}
+            visibility that produces predictable leads.
+          </p>
+        )}
       </div>
     </div>
   );

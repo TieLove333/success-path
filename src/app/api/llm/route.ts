@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import OpenAI from "openai";
 import type {
   AvailableStep,
@@ -52,11 +53,11 @@ function jsonResponse(data: unknown, status = 200) {
 
 function safeParseJson(
   text: string,
-): { ok: true; value: JsonValue } | { ok: false; error: string } {
+): { ok: true; value: JsonValue } | { ok: false; errorMessage: string } {
   try {
     return { ok: true, value: JSON.parse(text) as JsonValue };
   } catch (err) {
-    return { ok: false, error: String(err) };
+    return { ok: false, errorMessage: String(err) };
   }
 }
 
@@ -438,11 +439,21 @@ function normalizeRouteSelection(payload: unknown) {
 }
 
 export async function POST(req: Request) {
+  const requestId = randomUUID();
+  const startedAt = Date.now();
+
+  const logPrefix = `[api/llm requestId=${requestId}]`;
+  const elapsedMs = () => Date.now() - startedAt;
+
   if (!process.env.OPENAI_API_KEY) {
+    console.error(
+      `${logPrefix} missing OPENAI_API_KEY (elapsedMs=${elapsedMs()})`,
+    );
     return jsonResponse(
       {
         error:
           "OPENAI_API_KEY is not set. Add it to .env.local (server-side) and restart the dev server.",
+        requestId,
       },
       500,
     );
@@ -451,8 +462,15 @@ export async function POST(req: Request) {
   let body: LlmRequestBody;
   try {
     body = (await req.json()) as LlmRequestBody;
-  } catch {
-    return jsonResponse({ error: "Invalid JSON request body." }, 400);
+  } catch (err) {
+    console.error(
+      `${logPrefix} invalid JSON request body (elapsedMs=${elapsedMs()})`,
+      err,
+    );
+    return jsonResponse(
+      { error: "Invalid JSON request body.", requestId },
+      400,
+    );
   }
 
   const intent: LlmIntent = body?.intent ?? "build_step_plan";
@@ -467,17 +485,27 @@ export async function POST(req: Request) {
 
   const developer = `
 Product behavior:
-- You are a premium coaching assistant for a guided success path.
+- You are a premium coaching assistant for a guided success path specifically for REAL ESTATE AGENTS (and real estate teams/brokers).
+- Assume the user is a licensed real estate agent unless they explicitly say otherwise.
+- Keep advice grounded in real estate workflows: lead generation, listings, buyers, open houses, showings, local market expertise, trust-building, and compliance-safe messaging.
+- Use real-estate-relevant examples (e.g., "first-time buyers", "move-up sellers", "downsizers", "luxury", "investors", "relocation", "new construction") and location placeholders (e.g., "[City]").
+- Avoid non-RE assumptions (e.g., e-commerce funnels, SaaS product-led growth) unless the user states that context.
+- Tone: calm, high-end, direct, and execution-focused.
+
+Intent handling:
 - If intent is "route_next_step":
-  - pick the best next step based on userInput + progress + diagnostic answers (if provided) and return 2-3 recommended options.
-  - You MUST choose only from availableSteps.
+  - pick the best next step based on userInput + progress + diagnostic answers (if provided)
+  - you MUST choose only from availableSteps.
+  - return 1–3 recommended options depending on availability (if only 1 step exists, recommend just that 1).
 - If intent is "build_step_plan", return:
-  - one short assistant message
+  - one short assistant message written for a real estate agent
   - a step_hero artifact
   - a sequence of task_card artifacts (ordered)
   - next_actions including "continue" and "need_help"
-- If intent is "need_help", focus on producing a template artifact that helps with the active task, plus next_actions.
-- If you lack info, ask one clarifying question in messages and return minimal artifacts.
+- If intent is "need_help":
+  - produce a template artifact that helps a real estate agent complete the active task (bio, hooks, captions, DM scripts, value props, content pillars, etc.)
+  - include next_actions.
+- If you lack info, ask ONE clarifying question in messages and return minimal artifacts.
 `.trim();
 
   const context = {
@@ -524,6 +552,14 @@ Product behavior:
         ? "Recommend what I should work on next."
         : "Build the next step plan.";
 
+  console.info(
+    `${logPrefix} start intent=${intent} activeStepId=${String(
+      body?.activeStepId ?? null,
+    )} allowedTaskIds=${(allowedTaskIds ?? []).length} availableSteps=${
+      availableSteps.length
+    } (elapsedMs=${elapsedMs()})`,
+  );
+
   async function callModel({
     repairFromErrors,
   }: {
@@ -535,46 +571,118 @@ Product behavior:
         )}\nReturn corrected JSON ONLY.`
       : "";
 
-    const response = await client.chat.completions.create({
-      model: "gpt-4.1",
-      temperature: 0.2,
-      messages: [
-        { role: "system", content: system + repair },
-        { role: "developer", content: developer },
-        {
-          role: "developer",
-          content: `Context JSON:\n${JSON.stringify(context)}`,
-        },
-        { role: "user", content: user },
-      ],
-      response_format: { type: "json_object" },
-    });
+    let response;
+    try {
+      response = await client.chat.completions.create({
+        model: "gpt-4.1",
+        temperature: 0.2,
+        messages: [
+          { role: "system", content: system + repair },
+          { role: "developer", content: developer },
+          {
+            role: "developer",
+            content: `Context JSON:\n${JSON.stringify(context)}`,
+          },
+          { role: "user", content: user },
+        ],
+        response_format: { type: "json_object" },
+      });
+    } catch (err) {
+      console.error(
+        `${logPrefix} OpenAI call failed (elapsedMs=${elapsedMs()})`,
+        err,
+      );
+      throw err;
+    }
 
     const text = response?.choices?.[0]?.message?.content ?? "";
+    if (!isNonEmptyString(text)) {
+      console.warn(
+        `${logPrefix} OpenAI returned empty message content (elapsedMs=${elapsedMs()})`,
+      );
+    }
     return text;
   }
 
   // First attempt
-  const raw1 = await callModel();
+  let raw1 = "";
+  try {
+    raw1 = await callModel();
+  } catch (err) {
+    return jsonResponse(
+      {
+        error: "Upstream model call failed.",
+        requestId,
+      },
+      502,
+    );
+  }
+
   const parsed1 = safeParseJson(raw1);
 
   if (!parsed1.ok) {
+    const parseError =
+      "errorMessage" in parsed1 ? parsed1.errorMessage : "Unknown parse error.";
+
+    console.warn(
+      `${logPrefix} invalid JSON from model on attempt1 (elapsedMs=${elapsedMs()}): ${parseError}`,
+    );
+
     return jsonResponse(
       {
         error: "LLM output was not valid JSON.",
-        details: parsed1.error,
+        details: parseError,
+        requestId,
       },
       502,
     );
   }
 
   if (intent === "route_next_step") {
+    // If there is only one possible step, skip LLM routing complexity and select it.
+    // This prevents 502s when the validator expects 2+ recommendations but the product
+    // only has a single available step in the curriculum (common early in development).
+    if (availableSteps.length === 1) {
+      const only = availableSteps[0];
+      return jsonResponse(
+        normalizeRouteSelection({
+          selection: {
+            selectedStepId: only.id,
+            recommended: [
+              {
+                id: only.id,
+                score: 1,
+                reason:
+                  "Only one Step is available right now, so it’s selected automatically.",
+              },
+            ],
+          },
+        }),
+      );
+    }
+
     const validation1 = validateRouteSelection(parsed1.value, availableSteps);
     if (validation1.ok) {
       return jsonResponse(normalizeRouteSelection(parsed1.value));
     }
 
-    const raw2 = await callModel({ repairFromErrors: validation1.errors });
+    let raw2 = "";
+    try {
+      raw2 = await callModel({ repairFromErrors: validation1.errors });
+    } catch (err) {
+      console.error(
+        `${logPrefix} retry model call failed intent=route_next_step (elapsedMs=${elapsedMs()})`,
+        err,
+      );
+      return jsonResponse(
+        {
+          error: "Upstream model call failed (retry).",
+          requestId,
+        },
+        502,
+      );
+    }
+
     const parsed2 = safeParseJson(raw2);
 
     if (parsed2.ok) {
@@ -583,19 +691,47 @@ Product behavior:
         return jsonResponse(normalizeRouteSelection(parsed2.value));
       }
 
+      console.warn(
+        `${logPrefix} route selection did not validate after retry (elapsedMs=${elapsedMs()}): ${validation2.errors.join(
+          " | ",
+        )}`,
+      );
       return jsonResponse(
         {
           error: "LLM route selection did not validate after retry.",
           details: validation2.errors,
+          requestId,
         },
         502,
       );
     }
 
+    if (!parsed2.ok) {
+      const parseError =
+        "errorMessage" in parsed2
+          ? parsed2.errorMessage
+          : "Unknown parse error.";
+      console.warn(
+        `${logPrefix} route selection invalid JSON after retry (elapsedMs=${elapsedMs()}): ${parseError}`,
+      );
+      return jsonResponse(
+        {
+          error: "LLM route selection was not valid JSON after retry.",
+          details: parseError,
+          requestId,
+        },
+        502,
+      );
+    }
+
+    console.warn(
+      `${logPrefix} route selection invalid JSON after retry (elapsedMs=${elapsedMs()}): Unknown parse failure.`,
+    );
     return jsonResponse(
       {
         error: "LLM route selection was not valid JSON after retry.",
-        details: parsed2.error,
+        details: "Unknown parse failure.",
+        requestId,
       },
       502,
     );
@@ -608,7 +744,29 @@ Product behavior:
   }
 
   // Retry once with repair prompt
-  const raw2 = await callModel({ repairFromErrors: validation1.errors });
+  console.warn(
+    `${logPrefix} render plan failed validation on attempt1 (elapsedMs=${elapsedMs()}): ${validation1.errors.join(
+      " | ",
+    )}`,
+  );
+
+  let raw2 = "";
+  try {
+    raw2 = await callModel({ repairFromErrors: validation1.errors });
+  } catch (err) {
+    console.error(
+      `${logPrefix} retry model call failed intent=${intent} (elapsedMs=${elapsedMs()})`,
+      err,
+    );
+    return jsonResponse(
+      {
+        error: "Upstream model call failed (retry).",
+        requestId,
+      },
+      502,
+    );
+  }
+
   const parsed2 = safeParseJson(raw2);
 
   if (parsed2.ok) {
@@ -617,19 +775,45 @@ Product behavior:
       return jsonResponse(normalizePlan(parsed2.value));
     }
 
+    console.warn(
+      `${logPrefix} render plan did not validate after retry (elapsedMs=${elapsedMs()}): ${validation2.errors.join(
+        " | ",
+      )}`,
+    );
     return jsonResponse(
       {
         error: "LLM output did not validate after retry.",
         details: validation2.errors,
+        requestId,
       },
       502,
     );
   }
 
+  if (!parsed2.ok) {
+    const parseError =
+      "errorMessage" in parsed2 ? parsed2.errorMessage : "Unknown parse error.";
+    console.warn(
+      `${logPrefix} invalid JSON from model after retry (elapsedMs=${elapsedMs()}): ${parseError}`,
+    );
+    return jsonResponse(
+      {
+        error: "LLM output was not valid JSON after retry.",
+        details: parseError,
+        requestId,
+      },
+      502,
+    );
+  }
+
+  console.warn(
+    `${logPrefix} invalid JSON from model after retry (elapsedMs=${elapsedMs()}): Unknown parse failure.`,
+  );
   return jsonResponse(
     {
       error: "LLM output was not valid JSON after retry.",
-      details: parsed2.error,
+      details: "Unknown parse failure.",
+      requestId,
     },
     502,
   );
