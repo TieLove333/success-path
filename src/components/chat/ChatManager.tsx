@@ -315,6 +315,23 @@ export default function ChatManager() {
     // 1) Append the user message immediately (optimistic UI)
     setMessages((prev) => [...prev, { role: "user", text: trimmed }]);
 
+    // 1.1) Persist the user message (best-effort; don't block UX)
+    try {
+      await fetch("/api/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          role: "user",
+          content: trimmed,
+          stepId: activeStepId ?? null,
+          taskId: activeTaskContext?.taskId ?? null,
+        }),
+      });
+    } catch {
+      // ignore persistence failures for now (LLM + UI should still work)
+    }
+
     // 2) Build a minimal, safe context payload for the server
     const stepSpec = activeStepId ? getStepSpec(activeStepId) : null;
 
@@ -365,14 +382,44 @@ export default function ChatManager() {
         "Got it. Tell me what you have so far, and I’ll refine it.";
 
       setMessages((prev) => [...prev, { role: "agent", text: assistantText }]);
+
+      // 3.1) Persist the assistant message (best-effort)
+      try {
+        await fetch("/api/messages", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            role: "assistant",
+            content: assistantText,
+            stepId: activeStepId ?? null,
+            taskId: activeTaskContext?.taskId ?? null,
+          }),
+        });
+      } catch {
+        // ignore
+      }
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "agent",
-          text: "I couldn’t reach the assistant right now. Try sending that again in a moment.",
-        },
-      ]);
+      const fallback =
+        "I couldn’t reach the assistant right now. Try sending that again in a moment.";
+      setMessages((prev) => [...prev, { role: "agent", text: fallback }]);
+
+      // Persist the fallback assistant message as well (optional, best-effort)
+      try {
+        await fetch("/api/messages", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            role: "assistant",
+            content: fallback,
+            stepId: activeStepId ?? null,
+            taskId: activeTaskContext?.taskId ?? null,
+          }),
+        });
+      } catch {
+        // ignore
+      }
     }
   };
 
