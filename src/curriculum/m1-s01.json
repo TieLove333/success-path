@@ -1,0 +1,344 @@
+{
+  "curriculumVersion": "v1",
+  "module": {
+    "id": "m1",
+    "title": "Grow Your Base",
+    "order": 1
+  },
+  "step": {
+    "id": "m1.s01",
+    "moduleId": "m1",
+    "order": 1,
+    "title": "Optimize Your Instagram Bio",
+    "label": "FINDABLE",
+    "timeEstimateMinutes": 20,
+    "outcome": "Your Instagram profile immediately communicates who you help, how you help, and what to do next—so attention converts into action.",
+    "successCriteria": [
+      "Your Name field contains a searchable keyword relevant to your niche",
+      "Your bio uses a clear 4-line structure (who/how/credibility/CTA)",
+      "Your CTA and link work without friction (contact methods visible, link tested)"
+    ],
+    "entryPoints": {
+      "presetPrompts": [
+        {
+          "id": "prompt_profile_convert",
+          "label": "I want my profile to convert better",
+          "intent": "profile_conversion"
+        },
+        {
+          "id": "prompt_profile_unclear",
+          "label": "People visit my profile but don’t DM/click",
+          "intent": "profile_conversion"
+        },
+        {
+          "id": "prompt_optimize_bio",
+          "label": "Help me optimize my Instagram bio",
+          "intent": "instagram_bio"
+        },
+        {
+          "id": "prompt_findable",
+          "label": "I want to be more findable on Instagram",
+          "intent": "findable"
+        }
+      ],
+      "recommendationRules": [
+        {
+          "id": "rec_missing_step",
+          "when": {
+            "missingStepIds": ["m1.s01"]
+          },
+          "because": "This is the fastest way to stop profile clarity leaks and turn visits into actions."
+        },
+        {
+          "id": "rec_missing_tasks",
+          "when": {
+            "missingTaskIds": [
+              "m1.s01.t01",
+              "m1.s01.t02",
+              "m1.s01.t03",
+              "m1.s01.t04",
+              "m1.s01.t05.email_button",
+              "m1.s01.t05.link_test"
+            ]
+          },
+          "because": "Your profile foundation needs clarity before growth tactics compound."
+        }
+      ]
+    },
+    "assessment": {
+      "style": "diagnostic_yes_no",
+      "stopOnFirstNo": true,
+      "questions": [
+        {
+          "id": "m1.s01.q01",
+          "type": "yes_no",
+          "prompt": "If someone landed on your Instagram profile today, would they instantly understand who you help and how to contact you?"
+        },
+        {
+          "id": "m1.s01.q02",
+          "type": "yes_no",
+          "prompt": "Is your 'Name Field' optimized with keywords that your ideal client is actually searching for?"
+        },
+        {
+          "id": "m1.s01.q03",
+          "type": "yes_no",
+          "prompt": "Does your bio contain a direct Call to Action (CTA) that tells people exactly what to do next?"
+        },
+        {
+          "id": "m1.s01.q04",
+          "type": "yes_no",
+          "prompt": "Are your contact buttons and 'Link in Bio' fully functional and friction-free?"
+        }
+      ],
+      "routing": {
+        "onAllYes": {
+          "type": "recommend_next",
+          "note": "If the user answers Yes to all, congratulate and recommend the next Step in Module 1 when available."
+        },
+        "onFirstNo": {
+          "type": "enter_step",
+          "focusLabel": "FINDABLE",
+          "introMessages": [
+            "Thank you. That gives us clarity immediately.",
+            "Your Current Focus: FINDABLE",
+            "Right now, your profile is leaking attention because it isn't instantly clear. We're going to fix that in 20 minutes."
+          ]
+        }
+      }
+    },
+    "tasks": [
+      {
+        "id": "m1.s01.t01",
+        "required": true,
+        "title": "Define Your Niche in One Sentence",
+        "instructions": "Answer this: “I help ______ in ______ do/buy/sell ______.” Keep it simple and specific.",
+        "examples": [
+          "I help first-time buyers in Dallas purchase confidently.",
+          "I help growing families in Phoenix upgrade without financial stress.",
+          "I help out-of-state buyers relocate to Nashville smoothly."
+        ],
+        "links": []
+      },
+      {
+        "id": "m1.s01.t02",
+        "required": true,
+        "title": "Add a Keyword to Your Name Field",
+        "instructions": "Your name field is searchable. Instead of a plain name, use a descriptive title keyword that your ideal client would search.",
+        "examples": [
+          "Jane Smith | Dallas Realtor",
+          "Jane Smith | Phoenix Family Homes"
+        ],
+        "links": []
+      },
+      {
+        "id": "m1.s01.t03",
+        "required": true,
+        "title": "Write a Clear Bio Statement (4-Line Structure)",
+        "instructions": "Use this structure: Line 1: Who you help. Line 2: How you help. Line 3: Credibility or differentiator. Line 4: Clear call to action.",
+        "examples": [
+          "Helping first-time buyers in Dallas\nSimplifying the home buying process\nLocal market expert | 120+ homes sold\n⬇️ Grab your free Buyer Guide"
+        ],
+        "links": []
+      },
+      {
+        "id": "m1.s01.t04",
+        "required": true,
+        "title": "Add a Direct Call to Action (CTA)",
+        "instructions": "Your bio must tell people what to do next. Choose one CTA and make it obvious.",
+        "examples": [
+          "Download the free relocation guide",
+          "DM me 'BUY' to start",
+          "Book a consult below",
+          "Get the buyer checklist"
+        ],
+        "links": []
+      },
+      {
+        "id": "m1.s01.t05",
+        "required": true,
+        "title": "Confirm Contact Is Visible (No Friction)",
+        "instructions": "No friction. Make sure your email button is active and your link works. Test both right now.",
+        "examples": [],
+        "links": [],
+        "subtasks": [
+          {
+            "id": "m1.s01.t05.email_button",
+            "required": true,
+            "label": "Verify Email button is active"
+          },
+          {
+            "id": "m1.s01.t05.link_test",
+            "required": true,
+            "label": "Test 'Link in Bio' functionality"
+          }
+        ]
+      }
+    ],
+    "templates": [
+      {
+        "id": "m1.s01.tpl.niche_statement",
+        "format": "text",
+        "purpose": "Generate niche statement options using the “I help ___ in ___ ___ ___” structure.",
+        "inputKeys": ["audience", "location", "outcomeOrOffer", "tone"],
+        "notes": "Optional accelerator for Task 1; not required for completion."
+      },
+      {
+        "id": "m1.s01.tpl.bio_4_line",
+        "format": "text",
+        "purpose": "Generate 2–3 bio drafts using the 4-line structure and a single CTA.",
+        "inputKeys": ["audience", "location", "offer", "credibility", "ctaGoal", "tone"],
+        "notes": "Optional accelerator for Task 3; ensure CTA is singular and specific."
+      },
+      {
+        "id": "m1.s01.tpl.cta_options",
+        "format": "text",
+        "purpose": "Generate CTA options tailored to the user's offer and audience.",
+        "inputKeys": ["offer", "ctaGoal", "tone"],
+        "notes": "Optional accelerator for Task 4; keep CTAs action-oriented and short."
+      }
+    ],
+    "completion": {
+      "rule": "all_required_tasks",
+      "requiredTaskIds": [
+        "m1.s01.t01",
+        "m1.s01.t02",
+        "m1.s01.t03",
+        "m1.s01.t04",
+        "m1.s01.t05.email_button",
+        "m1.s01.t05.link_test"
+      ]
+    },
+    "artifacts": [
+      {
+        "id": "m1.s01.art.step_hero",
+        "kind": "step_hero",
+        "data": {
+          "badge": "Your Personalized Roadmap",
+          "headline": "Your 20-Minute Success Path",
+          "stepTitle": "Optimize Your Instagram Bio",
+          "promiseLine": "No redesign. No overthinking. Just clarity.",
+          "icon": "target"
+        }
+      },
+      {
+        "id": "m1.s01.art.task_m1_s01_t01",
+        "kind": "task_card",
+        "data": {
+          "taskId": "m1.s01.t01",
+          "title": "Define Your Niche in One Sentence",
+          "instructions": "Answer this: “I help ______ in ______ do/buy/sell ______.” Keep it simple and specific.",
+          "examples": [
+            "I help first-time buyers in Dallas purchase confidently.",
+            "I help growing families in Phoenix upgrade without financial stress.",
+            "I help out-of-state buyers relocate to Nashville smoothly."
+          ],
+          "links": [],
+          "required": true
+        }
+      },
+      {
+        "id": "m1.s01.art.task_m1_s01_t02",
+        "kind": "task_card",
+        "data": {
+          "taskId": "m1.s01.t02",
+          "title": "Add a Keyword to Your Name Field",
+          "instructions": "Your name field is searchable. Update it from a plain name to a descriptive title keyword.",
+          "examples": [
+            "Jane Smith | Dallas Realtor",
+            "Jane Smith | Phoenix Family Homes"
+          ],
+          "links": [],
+          "required": true
+        }
+      },
+      {
+        "id": "m1.s01.art.task_m1_s01_t03",
+        "kind": "task_card",
+        "data": {
+          "taskId": "m1.s01.t03",
+          "title": "Write a Clear Bio Statement (4-Line Structure)",
+          "instructions": "Use this structure: (1) Who you help (2) How you help (3) Credibility/differentiator (4) One clear CTA.",
+          "examples": [
+            "Helping first-time buyers in Dallas\nSimplifying the home buying process\nLocal market expert | 120+ homes sold\n⬇️ Grab your free Buyer Guide"
+          ],
+          "links": [],
+          "required": true
+        }
+      },
+      {
+        "id": "m1.s01.art.task_m1_s01_t04",
+        "kind": "task_card",
+        "data": {
+          "taskId": "m1.s01.t04",
+          "title": "Add a Direct Call to Action (CTA)",
+          "instructions": "Choose one CTA and make it obvious. If there is no CTA, attention dies.",
+          "examples": [
+            "Download the free relocation guide",
+            "DM me 'BUY' to start",
+            "Book a consult below",
+            "Get the buyer checklist"
+          ],
+          "links": [],
+          "required": true
+        }
+      },
+      {
+        "id": "m1.s01.art.task_m1_s01_t05",
+        "kind": "task_card",
+        "data": {
+          "taskId": "m1.s01.t05",
+          "title": "Confirm Contact Is Visible (No Friction)",
+          "instructions": "No friction. Make sure your email button is active and your link works. Test both right now.",
+          "examples": [],
+          "links": [],
+          "required": true,
+          "subtasks": [
+            {
+              "id": "m1.s01.t05.email_button",
+              "label": "Verify Email button is active",
+              "required": true
+            },
+            {
+              "id": "m1.s01.t05.link_test",
+              "label": "Test 'Link in Bio' functionality",
+              "required": true
+            }
+          ]
+        }
+      },
+      {
+        "id": "m1.s01.art.next_actions",
+        "kind": "next_actions",
+        "data": {
+          "actions": [
+            {
+              "id": "continue",
+              "label": "Continue",
+              "value": "continue",
+              "style": "primary"
+            },
+            {
+              "id": "need_help",
+              "label": "Help me write mine",
+              "value": "need_help",
+              "style": "secondary"
+            }
+          ]
+        }
+      }
+    ],
+    "bonus": {
+      "injectableResources": []
+    },
+    "source": {
+      "demo": {
+        "origin": "homepage",
+        "note": "This step spec is derived from the current homepage demo hardcoded in ChatManager missionData."
+      },
+      "transcript": {
+        "videoId": null,
+        "notes": "Optional: attach transcript references later if needed."
+      }
+    }
+  }
+}
