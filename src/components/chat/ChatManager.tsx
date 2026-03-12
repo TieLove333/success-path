@@ -17,6 +17,31 @@ import type {
   MissionData,
 } from "@/types/chat";
 
+type PersistedSessionState = {
+  session?: {
+    id: string;
+    isActive: boolean;
+    activeStepId: string | null;
+    activeTaskId: string | null;
+    completedItemIds: string[];
+    diagnosticAnswers: Record<string, unknown> | null;
+    createdAt?: string;
+    updatedAt?: string;
+  } | null;
+  messages?: Array<{
+    id: string;
+    role: "user" | "assistant" | "system";
+    content: string;
+    stepId: string | null;
+    taskId: string | null;
+    createdAt?: string;
+  }>;
+};
+
+type ChatManagerProps = {
+  hydratedState?: PersistedSessionState | null;
+};
+
 type LlmIntent = "route_next_step" | "build_step_plan" | "need_help";
 
 type AvailableStep = {
@@ -181,15 +206,20 @@ function extractActiveTaskFromMissionData(params: {
 function renderPlanToMissionData({
   stepSpec,
   renderPlan,
+  completedItemIds = [],
 }: {
   stepSpec: StepSpec | null | undefined;
   renderPlan: RenderPlan;
+  completedItemIds?: string[];
 }): MissionData {
   const taskCards = (renderPlan?.artifacts ?? []).filter(
     (a): a is TaskCardArtifact => a.kind === "task_card",
   );
   const stepHero = (renderPlan?.artifacts ?? []).find(
     (a): a is StepHeroArtifact => a.kind === "step_hero",
+  );
+  const completedSet = new Set(
+    (completedItemIds ?? []).filter((id): id is string => Boolean(id)),
   );
 
   const title = stepHero?.stepTitle ?? stepSpec?.title ?? "Success Path Step";
@@ -207,32 +237,93 @@ function renderPlanToMissionData({
         ? t.subtasks.map((st) => ({
             id: st.id,
             label: st.label,
-            completed: false,
+            completed: completedSet.has(st.id),
           }))
         : [
             {
               id: t.taskId,
               label: t.title,
-              completed: false,
+              completed: Boolean(t.taskId && completedSet.has(t.taskId)),
             },
           ],
     })),
   };
 }
 
-export default function ChatManager() {
-  const [isInitializing, setIsInitializing] = useState(true);
-  const [messages, setMessages] = useState<ChatMessage[]>([
+function persistedMessageToChatMessage(
+  message: NonNullable<PersistedSessionState["messages"]>[number],
+): ChatMessage | null {
+  if (!message || typeof message.content !== "string") return null;
+
+  if (message.role === "user") {
+    return { role: "user", text: message.content };
+  }
+
+  if (message.role === "assistant") {
+    return { role: "agent", text: message.content };
+  }
+
+  if (message.role === "system") {
+    return { role: "system", text: message.content };
+  }
+
+  return null;
+}
+
+function normalizeHydratedDiagnosticAnswers(
+  value: Record<string, unknown> | null | undefined,
+): DiagnosticAnswer[] {
+  if (!value) return [];
+
+  const answers = Array.isArray((value as { answers?: unknown[] }).answers)
+    ? ((value as { answers?: unknown[] }).answers ?? [])
+    : Array.isArray((value as { items?: unknown[] }).items)
+      ? ((value as { items?: unknown[] }).items ?? [])
+      : [];
+
+  return answers
+    .filter(
+      (item): item is { questionId?: string; answer?: string } =>
+        typeof item === "object" && item !== null,
+    )
+    .map((item) => ({
+      questionId:
+        typeof item.questionId === "string" ? item.questionId : undefined,
+      answer: typeof item.answer === "string" ? item.answer : "",
+    }))
+    .filter((item) => Boolean(item.answer));
+}
+
+export default function ChatManager({ hydratedState }: ChatManagerProps) {
+  const hydratedMessages = (hydratedState?.messages ?? [])
+    .map((message) => persistedMessageToChatMessage(message))
+    .filter((message): message is ChatMessage => Boolean(message));
+
+  const defaultMessages: ChatMessage[] = [
     { role: "agent", text: "Perfect. Let's run your 2-minute diagnostic." },
     {
       role: "agent",
       text: 'I\'m going to ask you four quick yes/no questions. Answer honestly — the first "No" shows us exactly where to focus.',
     },
-  ]);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  ];
+
+  const [isInitializing, setIsInitializing] = useState(
+    hydratedMessages.length > 0 ? false : true,
+  );
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    hydratedMessages.length > 0 ? hydratedMessages : defaultMessages,
+  );
+  const initialDiagnosticAnswers = normalizeHydratedDiagnosticAnswers(
+    hydratedState?.session?.diagnosticAnswers,
+  );
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(
+    initialDiagnosticAnswers.length,
+  );
   const [isDiagnosticActive, setIsDiagnosticActive] = useState(false);
   const [missionData, setMissionData] = useState<MissionData | null>(null);
-  const [showMissionIntro, setShowMissionIntro] = useState(false);
+  const [showMissionIntro, setShowMissionIntro] = useState(
+    Boolean(hydratedState?.session?.activeStepId),
+  );
   const [isBuildingStep, setIsBuildingStep] = useState(false);
 
   // Split-view execution mode additions (v1)
@@ -258,27 +349,135 @@ export default function ChatManager() {
 
   const [diagnosticAnswers, setDiagnosticAnswers] = useState<
     DiagnosticAnswer[]
-  >([]);
+  >(initialDiagnosticAnswers);
 
   const availableSteps = getAvailableSteps() as AvailableStep[];
-  const [activeStepId, setActiveStepId] = useState<string | null>(null);
+  const [activeStepId, setActiveStepId] = useState<string | null>(
+    hydratedState?.session?.activeStepId ?? null,
+  );
 
   useEffect(() => {
-    if (!isInitializing) {
+    if (
+      !isInitializing &&
+      !activeStepId &&
+      messages.length <= defaultMessages.length
+    ) {
       const timer = setTimeout(() => setIsDiagnosticActive(true), 1200);
       return () => clearTimeout(timer);
     }
-  }, [isInitializing]);
+  }, [activeStepId, isInitializing, messages.length]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function hydrateMissionFromSession() {
+      if (!activeStepId || missionData || isBuildingStep) return;
+
+      const selectedStepSpec = getStepSpec(activeStepId);
+      if (!selectedStepSpec) return;
+
+      try {
+        const renderPlan = await fetchLlmRenderPlan({
+          intent: "build_step_plan",
+          userInput: { type: "action", value: "build_step_plan" },
+          activeStepId,
+          progress: {
+            completedTaskIds: hydratedState?.session?.completedItemIds ?? [],
+          },
+          stepSpec: selectedStepSpec,
+        });
+
+        if (isCancelled) return;
+
+        setMissionData(
+          renderPlanToMissionData({
+            stepSpec: selectedStepSpec,
+            renderPlan,
+            completedItemIds: hydratedState?.session?.completedItemIds ?? [],
+          }),
+        );
+
+        if (hydratedState?.session?.activeTaskId) {
+          const selectedTaskId = hydratedState.session.activeTaskId;
+          const stepTitle =
+            (renderPlan?.artifacts ?? []).find(
+              (artifact): artifact is TaskCardArtifact =>
+                typeof artifact === "object" &&
+                artifact !== null &&
+                "kind" in artifact &&
+                artifact.kind === "task_card" &&
+                typeof artifact.taskId === "string" &&
+                artifact.taskId === selectedTaskId,
+            )?.title ?? "Current task";
+
+          setActiveTaskContext({
+            stepId: activeStepId,
+            taskId: selectedTaskId,
+            taskTitle: stepTitle,
+          });
+        }
+      } catch {
+        if (isCancelled) return;
+      }
+    }
+
+    void hydrateMissionFromSession();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    activeStepId,
+    hydratedState?.session?.activeTaskId,
+    hydratedState?.session?.completedItemIds,
+    isBuildingStep,
+    missionData,
+  ]);
+
+  async function persistSessionPatch(patch: {
+    activeStepId?: string | null;
+    activeTaskId?: string | null;
+    diagnosticAnswers?: Record<string, unknown> | null;
+  }) {
+    try {
+      await fetch("/api/session", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(patch),
+      });
+    } catch {
+      // best-effort persistence
+    }
+  }
+
+  async function persistCompletedItemIds(completedItemIds: string[]) {
+    try {
+      await fetch("/api/progress", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ completedItemIds }),
+      });
+    } catch {
+      // best-effort persistence
+    }
+  }
 
   const handleChoice = (choice: ChoiceItem) => {
+    const nextAnswer: DiagnosticAnswer = {
+      questionId: DIAGNOSTIC_QUESTIONS[currentQuestionIndex]?.id,
+      answer: choice.label,
+    };
+
     setMessages((prev) => [...prev, { role: "user", text: choice.label }]);
-    setDiagnosticAnswers((prev) => [
-      ...prev,
-      {
-        questionId: DIAGNOSTIC_QUESTIONS[currentQuestionIndex]?.id,
-        answer: choice.label,
-      },
-    ]);
+    setDiagnosticAnswers((prev) => {
+      const nextAnswers = [...prev, nextAnswer];
+      void persistSessionPatch({
+        diagnosticAnswers: { answers: nextAnswers },
+      });
+      return nextAnswers;
+    });
 
     if (choice.label === "No") {
       setIsDiagnosticActive(false);
@@ -585,8 +784,15 @@ export default function ChatManager() {
               renderPlanToMissionData({
                 stepSpec: selectedStepSpec,
                 renderPlan,
+                completedItemIds:
+                  hydratedState?.session?.completedItemIds ?? [],
               }),
             );
+            void persistSessionPatch({
+              activeStepId: selected,
+              activeTaskId: null,
+              diagnosticAnswers: { answers: diagnosticAnswers },
+            });
             setMessages((prev) => [
               ...prev,
               {
@@ -699,7 +905,16 @@ export default function ChatManager() {
         return { ...step, tasks: newTasks };
       });
 
-      return { ...prev, steps: newSteps };
+      const nextMission = { ...prev, steps: newSteps };
+      const completedItemIds = nextMission.steps.flatMap((step) =>
+        (step.tasks ?? [])
+          .filter((task) => task.completed && typeof task.id === "string")
+          .map((task) => String(task.id)),
+      );
+
+      void persistCompletedItemIds(completedItemIds);
+
+      return nextMission;
     });
   };
 
@@ -711,6 +926,10 @@ export default function ChatManager() {
   const handleGetHelpOnTask = (taskId: string, taskTitle: string) => {
     if (!activeStepId) return;
     setActiveTaskContext({ stepId: activeStepId, taskId, taskTitle });
+    void persistSessionPatch({
+      activeStepId,
+      activeTaskId: taskId,
+    });
 
     // Bring attention to the chat pane (v1: scroll to bottom)
     requestAnimationFrame(() => {

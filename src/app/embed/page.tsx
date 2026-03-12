@@ -232,9 +232,14 @@ export default function EmbedPage() {
   }, [allowedWpOrigins]);
 
   if (state.status === "ready") {
-    // Auth + session are established at this point; render the existing app UI.
-    // Next wiring step will hydrate ChatManager from `state.session` + `state.messages`.
-    return <ChatManager />;
+    return (
+      <ChatManager
+        hydratedState={{
+          session: state.session,
+          messages: state.messages,
+        }}
+      />
+    );
   }
 
   // Lightweight inline bootstrap UI (kept intentionally simple for iframe usage)
