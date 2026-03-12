@@ -22,7 +22,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 export type DbAppUser = {
   id: string;
   wp_user_id: string;
-  display_name: string | null;
+  wp_display_name: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -99,7 +99,10 @@ export class SupabaseServerError extends Error {
   }
 }
 
-function assertNonEmptyString(value: unknown, name: string): asserts value is string {
+function assertNonEmptyString(
+  value: unknown,
+  name: string,
+): asserts value is string {
   if (typeof value !== "string" || !value.trim()) {
     throw new SupabaseServerError(
       "INVALID_ARGUMENT",
@@ -135,7 +138,7 @@ export async function upsertAppUserByWpUserId(opts: {
     .upsert(
       {
         wp_user_id: opts.wpUserId,
-        display_name: opts.displayName ?? null,
+        wp_display_name: opts.displayName ?? null,
       },
       { onConflict: "wp_user_id" },
     )
@@ -170,7 +173,10 @@ export async function getAppUserById(userId: string): Promise<DbAppUser> {
     if (String(error.code).toLowerCase().includes("pgrst116")) {
       throw new SupabaseServerError("NOT_FOUND", "User not found.");
     }
-    throw new SupabaseServerError("DB_ERROR", `Failed to load user: ${error.message}`);
+    throw new SupabaseServerError(
+      "DB_ERROR",
+      `Failed to load user: ${error.message}`,
+    );
   }
   if (!data) throw new SupabaseServerError("NOT_FOUND", "User not found.");
 
@@ -227,7 +233,10 @@ export async function ensureActiveSessionForUser(opts: {
     );
   }
   if (!created.data) {
-    throw new SupabaseServerError("DB_ERROR", "Session insert returned no data.");
+    throw new SupabaseServerError(
+      "DB_ERROR",
+      "Session insert returned no data.",
+    );
   }
 
   return coerceSessionRow(created.data as DbSuccessPathSession);
@@ -270,7 +279,8 @@ export async function updateSession(opts: {
   const patch: Record<string, unknown> = {};
   if ("activeStepId" in opts) patch.active_step_id = opts.activeStepId ?? null;
   if ("activeTaskId" in opts) patch.active_task_id = opts.activeTaskId ?? null;
-  if ("diagnosticAnswers" in opts) patch.diagnostic_answers = opts.diagnosticAnswers ?? null;
+  if ("diagnosticAnswers" in opts)
+    patch.diagnostic_answers = opts.diagnosticAnswers ?? null;
 
   const { data, error } = await supabase
     .from("success_path_sessions")
@@ -298,7 +308,9 @@ export async function setCompletedItemIds(opts: {
 
   const supabase = getSupabaseServiceClient();
 
-  const completed = Array.from(new Set(opts.completedItemIds.map((s) => s.trim()).filter(Boolean)));
+  const completed = Array.from(
+    new Set(opts.completedItemIds.map((s) => s.trim()).filter(Boolean)),
+  );
 
   const { data, error } = await supabase
     .from("success_path_sessions")
@@ -360,7 +372,11 @@ export async function insertMessage(opts: {
       `Failed to insert message: ${error.message}`,
     );
   }
-  if (!data) throw new SupabaseServerError("DB_ERROR", "Message insert returned no data.");
+  if (!data)
+    throw new SupabaseServerError(
+      "DB_ERROR",
+      "Message insert returned no data.",
+    );
 
   return data as DbSuccessPathMessage;
 }
@@ -372,7 +388,10 @@ export async function listRecentMessages(opts: {
   assertNonEmptyString(opts.sessionId, "sessionId");
   const supabase = getSupabaseServiceClient();
 
-  const limit = typeof opts.limit === "number" && opts.limit > 0 ? Math.min(opts.limit, 100) : 20;
+  const limit =
+    typeof opts.limit === "number" && opts.limit > 0
+      ? Math.min(opts.limit, 100)
+      : 20;
 
   const { data, error } = await supabase
     .from("success_path_messages")
@@ -397,7 +416,10 @@ export async function listRecentMessages(opts: {
 export async function ensureSessionAndRecentMessages(opts: {
   userId: string;
   messageLimit?: number;
-}): Promise<{ session: DbSuccessPathSession; messages: DbSuccessPathMessage[] }> {
+}): Promise<{
+  session: DbSuccessPathSession;
+  messages: DbSuccessPathMessage[];
+}> {
   const session = await ensureActiveSessionForUser({ userId: opts.userId });
   const messages = await listRecentMessages({
     sessionId: session.id,

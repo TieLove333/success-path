@@ -2,24 +2,24 @@ Implementation Task List (follow-along checklist)
 This is the step-by-step execution list to implement membership integration end-to-end.
 
 Status legend:
-- [x] Done in repo
-- [ ] Not done yet / needs your setup
+- [x] Done in repo / confirmed complete
+- [ ] Not done yet / still needs setup or verification
 
 ### Phase 0 — DNS / hosting setup
-- [ ] Create Vercel project and deploy app
-- [ ] Connect custom domain: `successpath.porchlyte.com` → Vercel
-- [ ] Confirm HTTPS works and the app loads at `https://successpath.porchlyte.com`
+- [x] Create Vercel project and deploy app
+- [x] Connect custom domain: `successpath.porchlyte.com` → Vercel
+- [x] Confirm HTTPS works and the app loads at `https://successpath.porchlyte.com`
 
 ### Phase 1 — Supabase persistence (schema + keys)
-- [ ] Create Supabase project (prod)
-- [ ] Add Vercel env vars:
-  - [ ] `SUPABASE_URL`
-  - [ ] `SUPABASE_SERVICE_ROLE_KEY` (server-only)
-- [ ] Run SQL migrations from `supabase/migrations/*` in order
-- [ ] Verify tables exist:
-  - [ ] `public.app_users`
-  - [ ] `public.success_path_sessions`
-  - [ ] `public.success_path_messages`
+- [x] Create Supabase project (prod)
+- [x] Add Vercel env vars:
+  - [x] `SUPABASE_URL`
+  - [x] `SUPABASE_SERVICE_ROLE_KEY` (server-only)
+- [x] Run SQL migrations from `supabase/migrations/*` in order
+- [x] Verify tables exist:
+  - [x] `public.app_users`
+  - [x] `public.success_path_sessions`
+  - [x] `public.success_path_messages`
 
 ### Phase 2 — WP → App SSO payload (HMAC)
 - [ ] Decide where secret lives in WP (wp-config.php constant or environment)
@@ -93,6 +93,7 @@ Status legend:
   - [ ] how many messages to send to LLM per turn (recommend 8–12)
 
 ### Phase 6 — QA / reliability
+- [x] Confirm project builds successfully (`npm run build`)
 - [ ] Test in Safari + Chrome (iframe contexts)
 - [ ] Confirm two WP users see different sessions/messages
 - [ ] Confirm token exchange rejects expired/bad signatures
@@ -103,27 +104,27 @@ Status legend:
 - [ ] In WP members page, embed iframe: `https://successpath.porchlyte.com/embed`
 - [ ] Confirm `/embed` receives postMessage and the app loads (no “Waiting for sign-in…” screen)
 - [ ] Send a chat message and confirm:
- - [ ] a new row is created in `public.success_path_messages` with role `user`
- - [ ] the assistant reply is created in `public.success_path_messages` with role `assistant`
+  - [ ] a new row is created in `public.success_path_messages` with role `user`
+  - [ ] the assistant reply is created in `public.success_path_messages` with role `assistant`
 - [ ] Open the same WP page as a second WP user and confirm messages are isolated per user
 
+---
 
+## USER TO DO
 
+### Vercel environment variables
+- [x] `SUPABASE_URL`
+- [x] `SUPABASE_SERVICE_ROLE_KEY`
+- [ ] `WP_SSO_SECRET`
+- [ ] `APP_SESSION_SECRET`
+- [ ] `ALLOWED_WP_ORIGINS=https://members.porchlyte.com`
+- [ ] `APP_ORIGIN=https://successpath.porchlyte.com`
 
-USER TO DO
-
-- [ ] Vercel environment variables to set
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `WP_SSO_SECRET`
-- `APP_SESSION_SECRET`
-- `ALLOWED_WP_ORIGINS=https://members.porchlyte.com`
-- `APP_ORIGIN=https://successpath.porchlyte.com
-
-- [ ] Run supabase migrations
-- [ ] Connect supabase and vercel
-- [ ] Connect successpath.porchlyte.com to vercel
-- [ ] Embed auth code snippet into membership
-- [ ] embed ifram into membership
-- [ ] send message test to see if it saves into supabase
-- [ ] reload page and does my saved message load in
+### Infrastructure / integration tasks
+- [x] Run Supabase migrations
+- [x] Connect Supabase and Vercel
+- [x] Connect `successpath.porchlyte.com` to Vercel
+- [ ] Embed auth code snippet into membership site
+- [ ] Embed iframe into membership site
+- [ ] Send message test to confirm it saves into Supabase
+- [ ] Reload page and confirm saved messages load back in

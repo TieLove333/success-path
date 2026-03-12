@@ -9,8 +9,17 @@ import {
   verifyWpSsoEnvelopeOrThrow,
   type WpSsoEnvelope,
 } from "@/lib/auth";
-import { jsonError, jsonOk, readJsonBodyOrThrow, getRequestId, HttpError } from "@/lib/api";
-import { ensureActiveSessionForUser, upsertAppUserByWpUserId } from "@/lib/supabaseServer";
+import {
+  jsonError,
+  jsonOk,
+  readJsonBodyOrThrow,
+  getRequestId,
+  HttpError,
+} from "@/lib/api";
+import {
+  ensureActiveSessionForUser,
+  upsertAppUserByWpUserId,
+} from "@/lib/supabaseServer";
 
 export const runtime = "nodejs";
 
@@ -147,7 +156,8 @@ export async function POST(request: Request) {
       user: {
         id: user.id,
         wpUserId: user.wp_user_id,
-        displayName: user.display_name,
+        displayName:
+          (user as { wp_display_name?: string | null }).wp_display_name ?? null,
       },
       session: {
         id: session.id,
@@ -155,7 +165,9 @@ export async function POST(request: Request) {
         activeStepId: session.active_step_id,
         activeTaskId: session.active_task_id,
         completedItemIds: session.completed_item_ids ?? [],
-        diagnosticAnswers: (session.diagnostic_answers as Record<string, unknown> | null) ?? null,
+        diagnosticAnswers:
+          (session.diagnostic_answers as Record<string, unknown> | null) ??
+          null,
       },
     };
 
@@ -185,7 +197,11 @@ export async function POST(request: Request) {
 // Optional: respond to preflight explicitly (useful when embedded and calling API cross-site)
 export async function OPTIONS() {
   const requestId = crypto.randomUUID?.() ?? `req_${Date.now()}`;
-  const res = NextResponse.json({ ok: true, requestId, data: { preflight: true } });
+  const res = NextResponse.json({
+    ok: true,
+    requestId,
+    data: { preflight: true },
+  });
   res.headers.set("access-control-allow-methods", "POST, OPTIONS");
   res.headers.set("access-control-allow-headers", "content-type, x-request-id");
   // We intentionally do NOT set ACAO here, because this endpoint is intended to be called
