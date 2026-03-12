@@ -394,7 +394,7 @@ export default function ChatManager() {
           (
             artifact,
           ): artifact is {
-            kind?: string;
+            kind: string;
             data?: Record<string, unknown>;
             title?: string;
             headline?: string;
@@ -410,8 +410,9 @@ export default function ChatManager() {
             typeof artifact === "object" &&
             artifact !== null &&
             "kind" in artifact &&
-            ((artifact as { kind?: string }).kind === "template" ||
-              (artifact as { kind?: string }).kind === "resource_links"),
+            typeof (artifact as { kind?: unknown }).kind === "string" &&
+            ((artifact as { kind: string }).kind === "template" ||
+              (artifact as { kind: string }).kind === "resource_links"),
         )
         .map((artifact) => {
           const data =

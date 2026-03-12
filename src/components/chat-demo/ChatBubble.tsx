@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-type ChatBubbleRole = "agent" | "question" | "user";
+type ChatBubbleRole = "agent" | "question" | "user" | "system";
 
 type ChatBubbleProps = {
   role: ChatBubbleRole;
@@ -15,10 +15,12 @@ export default function ChatBubble({
 }: ChatBubbleProps) {
   const isAgent = role === "agent";
   const isQuestion = role === "question";
+  const isSystem = role === "system";
 
   let bubbleClass = "agent-bubble";
-  if (!isAgent && !isQuestion) bubbleClass = "user-bubble";
+  if (!isAgent && !isQuestion && !isSystem) bubbleClass = "user-bubble";
   if (isQuestion) bubbleClass = "question-bubble";
+  if (isSystem) bubbleClass = "system-bubble";
 
   return (
     <div
