@@ -30,6 +30,11 @@ export type DbAppUser = {
 export type DbSuccessPathSession = {
   id: string;
   user_id: string;
+
+  // Backed by DB column `status` in success_path_sessions
+  status: "active" | "completed" | "archived";
+
+  // Derived helper for existing API response mappings
   is_active: boolean;
 
   active_step_id: string | null;
@@ -198,7 +203,7 @@ export async function ensureActiveSessionForUser(opts: {
     .from("success_path_sessions")
     .select("*")
     .eq("user_id", opts.userId)
-    .eq("is_active", true)
+    .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(1);
 
@@ -217,7 +222,7 @@ export async function ensureActiveSessionForUser(opts: {
     .from("success_path_sessions")
     .insert({
       user_id: opts.userId,
-      is_active: true,
+      status: "active",
       active_step_id: null,
       active_task_id: null,
       completed_item_ids: [],
@@ -252,7 +257,7 @@ export async function getActiveSessionForUser(opts: {
     .from("success_path_sessions")
     .select("*")
     .eq("user_id", opts.userId)
-    .eq("is_active", true)
+    .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(1);
 
@@ -331,8 +336,16 @@ export async function setCompletedItemIds(opts: {
 }
 
 function coerceSessionRow(row: DbSuccessPathSession): DbSuccessPathSession {
+  const rawStatus = (row as any).status;
+  const status: "active" | "completed" | "archived" =
+    rawStatus === "completed" || rawStatus === "archived"
+      ? rawStatus
+      : "active";
+
   return {
     ...row,
+    status,
+    is_active: status === "active",
     completed_item_ids: normalizeStringArray((row as any).completed_item_ids),
     diagnostic_answers: (row as any).diagnostic_answers ?? null,
   };
@@ -348,16 +361,49 @@ export async function insertMessage(opts: {
   content: string;
   stepId?: string | null;
   taskId?: string | null;
+  userId?: string | null;
 }): Promise<DbSuccessPathMessage> {
   assertNonEmptyString(opts.sessionId, "sessionId");
   assertNonEmptyString(opts.content, "content");
 
   const supabase = getSupabaseServiceClient();
 
+  // success_path_messages.user_id is required by schema.
+  // Prefer explicit userId when provided; otherwise resolve it from the session row.
+  let resolvedUserId =
+    typeof opts.userId === "string" ? opts.userId.trim() : "";
+
+  if (!resolvedUserId) {
+    const sessionLookup = await supabase
+      .from("success_path_sessions")
+      .select("user_id")
+      .eq("id", opts.sessionId)
+      .single();
+
+    if (sessionLookup.error) {
+      throw new SupabaseServerError(
+        "DB_ERROR",
+        `Failed to resolve message user_id from session: ${sessionLookup.error.message}`,
+      );
+    }
+
+    const fromSession = (sessionLookup.data as { user_id?: string } | null)
+      ?.user_id;
+    if (typeof fromSession !== "string" || !fromSession.trim()) {
+      throw new SupabaseServerError(
+        "DB_ERROR",
+        "Failed to resolve message user_id from session.",
+      );
+    }
+
+    resolvedUserId = fromSession.trim();
+  }
+
   const { data, error } = await supabase
     .from("success_path_messages")
     .insert({
       session_id: opts.sessionId,
+      user_id: resolvedUserId,
       role: opts.role,
       content: opts.content,
       step_id: opts.stepId ?? null,
