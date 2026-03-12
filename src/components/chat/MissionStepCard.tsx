@@ -12,6 +12,7 @@ type MissionStepCardProps = {
   tasks?: MissionTask[];
   isCompleted?: boolean;
   onToggleTask: (taskId: string) => void;
+  onGetHelp?: () => void;
 };
 
 export default function MissionStepCard({
@@ -22,6 +23,7 @@ export default function MissionStepCard({
   tasks,
   isCompleted,
   onToggleTask,
+  onGetHelp,
 }: MissionStepCardProps) {
   const allChecklistDone = useMemo(() => {
     if (!tasks || tasks.length === 0) return false;
@@ -47,7 +49,60 @@ export default function MissionStepCard({
 
   return (
     <div className="premium-card animate-in" style={{ marginBottom: "2rem" }}>
-      <span className="tagline">Task {stepNumber}</span>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "1rem",
+          marginBottom: "0.5rem",
+        }}
+      >
+        <span className="tagline" style={{ marginBottom: 0 }}>
+          Task {stepNumber}
+        </span>
+
+        <button
+          type="button"
+          onClick={() => onGetHelp?.()}
+          style={{
+            border: "1px solid var(--brand-terracotta)",
+            background: "var(--brand-terracotta)",
+            color: "white",
+            padding: "0.5rem 0.9rem",
+            borderRadius: "999px",
+            cursor: "pointer",
+            fontWeight: 600,
+            fontSize: "0.85rem",
+            whiteSpace: "nowrap",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            boxShadow: "0 8px 18px rgba(199, 125, 93, 0.25)",
+          }}
+          title="Get help on this"
+          aria-label="Get help on this"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            aria-hidden="true"
+            style={{ display: "block" }}
+          >
+            <path
+              d="M4 6.5A4.5 4.5 0 0 1 8.5 2h7A4.5 4.5 0 0 1 20 6.5v5A4.5 4.5 0 0 1 15.5 16H9l-4 4v-4.5A4.5 4.5 0 0 1 4 11.5v-5z"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span>Get help</span>
+          <span style={{ fontSize: "1rem", lineHeight: 1 }}>→</span>
+        </button>
+      </div>
 
       <div
         style={{
@@ -150,9 +205,10 @@ export default function MissionStepCard({
                 padding: "0.75rem",
                 borderRadius: "12px",
                 transition: "var(--transition-standard)",
+                marginBottom: "0.5rem",
                 background: task.completed
-                  ? "rgba(107, 112, 92, 0.05)"
-                  : "transparent",
+                  ? "rgba(107, 112, 92, 0.12)"
+                  : "rgba(107, 112, 92, 0.04)",
               }}
             >
               <input

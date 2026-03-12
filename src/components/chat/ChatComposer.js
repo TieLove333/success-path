@@ -58,7 +58,7 @@ export default function ChatComposer({
       bottom: 0,
       width: "100%",
       zIndex: 20,
-      padding: "1.25rem 0 2rem",
+      padding: "1.25rem 0 0",
       background:
         "linear-gradient(to top, rgba(245, 244, 240, 0.98), rgba(245, 244, 240, 0.7), rgba(245, 244, 240, 0))",
       backdropFilter: "blur(6px)",

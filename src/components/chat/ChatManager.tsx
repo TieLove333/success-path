@@ -241,6 +241,17 @@ export default function ChatManager() {
     taskId: string;
     taskTitle: string;
   } | null>(null);
+  const [helpArtifacts, setHelpArtifacts] = useState<
+    Array<{
+      id: string;
+      kind: string;
+      title?: string;
+      content?: string;
+      items?: string[];
+      links?: Array<{ label?: string; url?: string }>;
+    }>
+  >([]);
+  const [isLoadingHelp, setIsLoadingHelp] = useState(false);
 
   const workspaceScrollRef = useRef<HTMLDivElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
@@ -314,6 +325,7 @@ export default function ChatManager() {
 
     // 1) Append the user message immediately (optimistic UI)
     setMessages((prev) => [...prev, { role: "user", text: trimmed }]);
+    setIsLoadingHelp(true);
 
     // 1.1) Persist the user message (best-effort; don't block UX)
     try {
@@ -345,6 +357,13 @@ export default function ChatManager() {
       ? `Context: User is asking about ${activeTaskContext.taskTitle}.\n\n`
       : "";
 
+    const normalizeArtifactText = (value: string) =>
+      value
+        .replace(/\s*\d+\.\s+/g, "\n\n$&")
+        .replace(/\s*[-•]\s+/g, "\n• ")
+        .replace(/Tips:\s*/g, "\n\nTips:\n")
+        .trim();
+
     // 3) Call the LLM route with intent=need_help
     try {
       const plan = await fetchLlmRenderPlan({
@@ -368,6 +387,79 @@ export default function ChatManager() {
               }
             : (stepSpec ?? undefined),
       });
+
+      const rawArtifacts = Array.isArray(plan?.artifacts) ? plan.artifacts : [];
+      const nextHelpArtifacts = rawArtifacts
+        .filter(
+          (
+            artifact,
+          ): artifact is {
+            kind?: string;
+            data?: Record<string, unknown>;
+            title?: string;
+            headline?: string;
+            name?: string;
+            content?: string;
+            body?: string;
+            template?: string;
+            items?: string[];
+            bullets?: string[];
+            examples?: string[];
+            links?: Array<{ label?: string; url?: string }>;
+          } =>
+            typeof artifact === "object" &&
+            artifact !== null &&
+            "kind" in artifact &&
+            ((artifact as { kind?: string }).kind === "template" ||
+              (artifact as { kind?: string }).kind === "resource_links"),
+        )
+        .map((artifact) => {
+          const data =
+            artifact.data && typeof artifact.data === "object"
+              ? artifact.data
+              : {};
+          const title =
+            (artifact.title as string) ||
+            (artifact.headline as string) ||
+            (artifact.name as string) ||
+            (data?.title as string) ||
+            (data?.headline as string) ||
+            (data?.name as string) ||
+            (artifact.kind === "resource_links" ? "Helpful links" : "");
+          const rawContent =
+            (artifact.content as string) ||
+            (artifact.body as string) ||
+            (artifact.template as string) ||
+            (data?.content as string) ||
+            (data?.body as string) ||
+            (data?.template as string) ||
+            "";
+          const content = rawContent ? normalizeArtifactText(rawContent) : "";
+          const items =
+            (artifact.items as string[]) ||
+            (artifact.bullets as string[]) ||
+            (artifact.examples as string[]) ||
+            (data?.items as string[]) ||
+            (data?.bullets as string[]) ||
+            (data?.examples as string[]) ||
+            [];
+          const links =
+            (artifact.links as Array<{ label?: string; url?: string }>) ||
+            (data?.links as Array<{ label?: string; url?: string }>) ||
+            [];
+          return {
+            id: `${String(artifact.kind)}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            kind: String(artifact.kind),
+            title,
+            content,
+            items: Array.isArray(items) ? items : [],
+            links: Array.isArray(links) ? links : [],
+          };
+        });
+
+      if (nextHelpArtifacts.length > 0) {
+        setHelpArtifacts((prev) => [...prev, ...nextHelpArtifacts]);
+      }
 
       const assistantText =
         (plan?.messages ?? []).find(
@@ -420,6 +512,8 @@ export default function ChatManager() {
       } catch {
         // ignore
       }
+    } finally {
+      setIsLoadingHelp(false);
     }
   };
 
@@ -492,6 +586,84 @@ export default function ChatManager() {
                 renderPlan,
               }),
             );
+            setMessages((prev) => [
+              ...prev,
+              {
+                role: "system",
+                text: (
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "1rem",
+                      textAlign: "left",
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "44px",
+                        height: "44px",
+                        borderRadius: "14px",
+                        background: "rgba(255,255,255,0.28)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flex: "0 0 auto",
+                      }}
+                    >
+                      <svg
+                        width="22"
+                        height="22"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        aria-hidden="true"
+                      >
+                        <path
+                          d="M9 11.5 11 13.5 15.5 9"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                        <path
+                          d="M7 4.5h10A2.5 2.5 0 0 1 19.5 7v10a2.5 2.5 0 0 1-2.5 2.5H7A2.5 2.5 0 0 1 4.5 17V7A2.5 2.5 0 0 1 7 4.5Z"
+                          stroke="currentColor"
+                          strokeWidth="1.7"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <div
+                        style={{
+                          fontSize: "0.78rem",
+                          fontWeight: 800,
+                          letterSpacing: "0.14em",
+                          textTransform: "uppercase",
+                          marginBottom: "0.45rem",
+                          opacity: 0.9,
+                        }}
+                      >
+                        Your tasks are ready
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "1.05rem",
+                          lineHeight: 1.6,
+                          fontWeight: 500,
+                        }}
+                      >
+                        Your success path steps are created for you. Go through
+                        each task and check it off as you complete it. You can
+                        click the "Get help on this" button for each task to
+                        chat with me about it here.
+                      </div>
+                    </div>
+                  </div>
+                ),
+              },
+            ]);
           } catch (err) {
             setMessages((prev) => [
               ...prev,
@@ -722,8 +894,8 @@ export default function ChatManager() {
             // - desktop: two columns (workspace + chat)
             // - smaller widths: stack (workspace above chat)
             display: "grid",
-            gridTemplateColumns: "minmax(420px, 520px) minmax(520px, 1fr)",
-            gap: "1.25rem",
+            gridTemplateColumns: "minmax(560px, 1.1fr) minmax(360px, 0.8fr)",
+            gap: "2rem",
             alignItems: "stretch",
 
             // Use the full viewport "window" width so the chat doesn't get squeezed
@@ -803,7 +975,7 @@ export default function ChatManager() {
               paddingBottom: "1.25rem",
 
               // Keep workspace from collapsing too small or growing too wide
-              minWidth: "420px",
+              minWidth: "520px",
             }}
           >
             <div className="premium-card" style={{ marginBottom: "1rem" }}>
@@ -881,19 +1053,93 @@ export default function ChatManager() {
             </div>
 
             {isBuildingStep && (
-              <div
-                className="premium-card animate-in"
-                style={{ marginBottom: "1rem", opacity: 0.9 }}
-              >
-                <span className="tagline">Building your plan…</span>
-                <h2 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
-                  Generating your tasks
-                </h2>
-                <div style={{ color: "var(--text-muted)" }}>
-                  This takes a few seconds. Your Step + Tasks will load all at
-                  once.
+              <>
+                <div
+                  className="premium-card animate-in"
+                  style={{ marginBottom: "1rem", opacity: 0.9 }}
+                >
+                  <span className="tagline">Building your plan…</span>
+                  <h2 style={{ fontSize: "1.2rem", marginBottom: "0.5rem" }}>
+                    Generating your tasks
+                  </h2>
+                  <div style={{ color: "var(--text-muted)" }}>
+                    This takes a few seconds. Your Step + Tasks will load all at
+                    once.
+                  </div>
                 </div>
-              </div>
+
+                <div
+                  className="premium-card animate-in"
+                  style={{
+                    marginBottom: "1rem",
+                    opacity: 0.78,
+                    padding: "1.5rem",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: "0.9rem",
+                    }}
+                  >
+                    {[1, 2, 3].map((item) => (
+                      <div
+                        key={item}
+                        style={{
+                          borderRadius: "20px",
+                          border: "1px solid var(--card-border)",
+                          background: "rgba(107, 112, 92, 0.04)",
+                          padding: "1.1rem 1rem",
+                        }}
+                      >
+                        <div
+                          className="skeleton-shimmer"
+                          style={{
+                            width: "120px",
+                            height: "12px",
+                            borderRadius: "999px",
+                            background:
+                              "linear-gradient(90deg, rgba(107, 112, 92, 0.08), rgba(107, 112, 92, 0.18), rgba(107, 112, 92, 0.08))",
+                            marginBottom: "0.8rem",
+                          }}
+                        />
+                        <div
+                          className="skeleton-shimmer"
+                          style={{
+                            width: item === 2 ? "72%" : "64%",
+                            height: "18px",
+                            borderRadius: "999px",
+                            background:
+                              "linear-gradient(90deg, rgba(107, 112, 92, 0.10), rgba(107, 112, 92, 0.22), rgba(107, 112, 92, 0.10))",
+                            marginBottom: "0.75rem",
+                          }}
+                        />
+                        <div
+                          className="skeleton-shimmer"
+                          style={{
+                            width: "100%",
+                            height: "10px",
+                            borderRadius: "999px",
+                            background:
+                              "linear-gradient(90deg, rgba(107, 112, 92, 0.07), rgba(107, 112, 92, 0.14), rgba(107, 112, 92, 0.07))",
+                            marginBottom: "0.5rem",
+                          }}
+                        />
+                        <div
+                          className="skeleton-shimmer"
+                          style={{
+                            width: "84%",
+                            height: "10px",
+                            borderRadius: "999px",
+                            background:
+                              "linear-gradient(90deg, rgba(107, 112, 92, 0.07), rgba(107, 112, 92, 0.14), rgba(107, 112, 92, 0.07))",
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
             )}
 
             {missionData &&
@@ -906,33 +1152,15 @@ export default function ChatManager() {
                     examples={step.examples}
                     tasks={step.tasks}
                     onToggleTask={toggleTask}
+                    onGetHelp={() =>
+                      handleGetHelpOnTask(
+                        (step?.tasks?.[0]?.id ??
+                          step?.tasks?.[0]?.taskId ??
+                          `task_${step.number}`) as string,
+                        `Task ${step.number} — ${step.title}`,
+                      )
+                    }
                   />
-
-                  <div style={{ marginTop: "-1rem", marginBottom: "1.25rem" }}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        handleGetHelpOnTask(
-                          (step?.tasks?.[0]?.id ??
-                            step?.tasks?.[0]?.taskId ??
-                            `task_${step.number}`) as string,
-                          `Task ${step.number} — ${step.title}`,
-                        )
-                      }
-                      style={{
-                        width: "100%",
-                        border: "1px solid var(--card-border)",
-                        background: "rgba(0,0,0,0.02)",
-                        color: "var(--text-dark)",
-                        padding: "0.9rem 1rem",
-                        borderRadius: "16px",
-                        cursor: "pointer",
-                        fontWeight: 600,
-                      }}
-                    >
-                      Get help on this
-                    </button>
-                  </div>
                 </div>
               ))}
 
@@ -999,7 +1227,11 @@ export default function ChatManager() {
               minHeight: 0,
 
               // Ensure chat pane has enough room to feel like a real conversation area
-              minWidth: "520px",
+              minWidth: "360px",
+              background: "rgba(255,255,255,0.7)",
+              border: "1px solid rgba(255,255,255,0.6)",
+              borderRadius: "20px",
+              backdropFilter: "blur(6px)",
             }}
           >
             <div
@@ -1024,6 +1256,151 @@ export default function ChatManager() {
                 </ChatBubble>
               ))}
 
+              {helpArtifacts.map((artifact) => (
+                <div
+                  key={artifact.id}
+                  className="premium-card animate-in"
+                  style={{
+                    marginBottom: "1.5rem",
+                    padding: "1.5rem",
+                    boxShadow: "var(--shadow-soft)",
+                    background:
+                      artifact.kind === "template"
+                        ? "linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,248,244,0.92))"
+                        : "white",
+                  }}
+                >
+                  {artifact.title && (
+                    <h4 style={{ fontSize: "1.2rem", marginBottom: "0.9rem" }}>
+                      {artifact.title}
+                    </h4>
+                  )}
+
+                  {artifact.content && (
+                    <div
+                      style={{
+                        color: "var(--text-muted)",
+                        marginBottom:
+                          artifact.items && artifact.items.length > 0
+                            ? "1rem"
+                            : "0",
+                        whiteSpace: "pre-line",
+                        lineHeight: 1.75,
+                      }}
+                    >
+                      {artifact.content}
+                    </div>
+                  )}
+
+                  {artifact.items && artifact.items.length > 0 && (
+                    <ul
+                      style={{
+                        paddingLeft: "1.2rem",
+                        marginBottom: artifact.links?.length ? "1rem" : "0",
+                      }}
+                    >
+                      {artifact.items.map((item, idx) => (
+                        <li
+                          key={idx}
+                          style={{
+                            marginBottom: "0.65rem",
+                            color: "var(--text-dark)",
+                            lineHeight: 1.6,
+                          }}
+                        >
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {artifact.links && artifact.links.length > 0 && (
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "0.6rem",
+                        marginTop:
+                          artifact.content || artifact.items?.length
+                            ? "0.75rem"
+                            : "0",
+                      }}
+                    >
+                      {artifact.links.map((link, idx) => (
+                        <a
+                          key={idx}
+                          href={link.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            color: "var(--brand-olive)",
+                            fontWeight: 600,
+                            textDecoration: "underline",
+                          }}
+                        >
+                          {link.label || link.url}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {isLoadingHelp && (
+                <div
+                  className="premium-card animate-in"
+                  style={{
+                    marginBottom: "1.5rem",
+                    padding: "1.5rem",
+                    opacity: 0.85,
+                  }}
+                >
+                  <div
+                    className="skeleton-shimmer"
+                    style={{
+                      width: "180px",
+                      height: "18px",
+                      borderRadius: "999px",
+                      background:
+                        "linear-gradient(90deg, rgba(199, 125, 93, 0.12), rgba(199, 125, 93, 0.24), rgba(199, 125, 93, 0.12))",
+                      marginBottom: "1rem",
+                    }}
+                  />
+                  <div
+                    className="skeleton-shimmer"
+                    style={{
+                      width: "100%",
+                      height: "12px",
+                      borderRadius: "999px",
+                      background:
+                        "linear-gradient(90deg, rgba(107, 112, 92, 0.08), rgba(107, 112, 92, 0.18), rgba(107, 112, 92, 0.08))",
+                      marginBottom: "0.65rem",
+                    }}
+                  />
+                  <div
+                    className="skeleton-shimmer"
+                    style={{
+                      width: "92%",
+                      height: "12px",
+                      borderRadius: "999px",
+                      background:
+                        "linear-gradient(90deg, rgba(107, 112, 92, 0.08), rgba(107, 112, 92, 0.18), rgba(107, 112, 92, 0.08))",
+                      marginBottom: "0.65rem",
+                    }}
+                  />
+                  <div
+                    className="skeleton-shimmer"
+                    style={{
+                      width: "78%",
+                      height: "12px",
+                      borderRadius: "999px",
+                      background:
+                        "linear-gradient(90deg, rgba(107, 112, 92, 0.08), rgba(107, 112, 92, 0.18), rgba(107, 112, 92, 0.08))",
+                    }}
+                  />
+                </div>
+              )}
+
               {/* Keep diagnostic question UI only in phase 1 */}
             </div>
 
@@ -1033,7 +1410,7 @@ export default function ChatManager() {
                 position: "sticky",
                 bottom: 0,
                 paddingTop: "0.75rem",
-                paddingBottom: "1rem",
+                paddingBottom: "0.5rem",
                 // Keep only a subtle fade so content feels grounded, but remove the extra "container" card
                 background:
                   "linear-gradient(to bottom, rgba(248,245,239,0), rgba(248,245,239,0.88) 30%, rgba(248,245,239,1))",

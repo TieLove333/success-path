@@ -11,8 +11,8 @@ export default function ProgressTracker({ percentage }: ProgressTrackerProps) {
       className="animate-in"
       style={{
         position: "fixed",
-        top: "2rem",
-        right: "2rem",
+        top: "0.5rem",
+        right: "0.5rem",
         background: "white",
         border: "1px solid var(--card-border)",
         borderRadius: "24px",

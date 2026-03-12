@@ -17,7 +17,7 @@ export type DiagnosticAnswer = {
 };
 
 export type ChatMessage = {
-  role: "agent" | "user" | "question";
+  role: "agent" | "user" | "question" | "system";
   text: string | ReactNode;
 };
 

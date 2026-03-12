@@ -112,10 +112,18 @@ Status legend:
 
 USER TO DO
 
-What you need to set in Vercel env (Phase 3 + Phase 1)
+- [ ] Vercel environment variables to set
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `WP_SSO_SECRET`
 - `APP_SESSION_SECRET`
 - `ALLOWED_WP_ORIGINS=https://members.porchlyte.com`
 - `APP_ORIGIN=https://successpath.porchlyte.com
+
+- [ ] Run supabase migrations
+- [ ] Connect supabase and vercel
+- [ ] Connect successpath.porchlyte.com to vercel
+- [ ] Embed auth code snippet into membership
+- [ ] embed ifram into membership
+- [ ] send message test to see if it saves into supabase
+- [ ] reload page and does my saved message load in
